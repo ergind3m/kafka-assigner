@@ -356,7 +356,7 @@ public class KafkaAssignmentGenerator {
         return replicaAssignment;
     }
 
-    private static JSONObject formatAsReassignmentJson( AdminClient adminClient, List<String> topics) {
+    public static JSONObject formatAsReassignmentJson( AdminClient adminClient, List<String> topics) {
         JSONObject reassignmentJson = new JSONObject();
         Map<String, TopicDescription> topicDescriptions = null;
         try {
@@ -367,9 +367,9 @@ public class KafkaAssignmentGenerator {
                     JSONObject partitionObj = new JSONObject();
                     partitionObj.put("topic", topicName);
                     partitionObj.put("partition", partitionInfo.partition());
-                    List<String> replicas = new ArrayList<String>();
+                    List<Integer> replicas = new ArrayList<Integer>();
                     for (Node replica : partitionInfo.replicas()) {
-                        replicas.add(replica.idString());
+                        replicas.add(replica.id());
                     }
                     partitionObj.put("replicas",replicas);
 
