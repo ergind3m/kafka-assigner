@@ -5,7 +5,7 @@
   <groupId>siftscience</groupId>
   <artifactId>kafka-assigner</artifactId>
   <packaging>jar</packaging>
-  <version>1.1</version>
+  <version>1.2</version>
 
   <name>kafka-assigner</name>
   <description>Tools for reassigning Kafka partitions with minimal movement</description>
@@ -48,13 +48,13 @@
     </dependency>
     <dependency>
       <groupId>org.apache.kafka</groupId>
-      <artifactId>kafka_2.11</artifactId>
-      <version>0.10.0.0</version>
+      <artifactId>kafka_2.13</artifactId>
+      <version>2.6.0</version>
     </dependency>
     <dependency>
       <groupId>org.apache.kafka</groupId>
       <artifactId>kafka-clients</artifactId>
-      <version>0.10.0.0</version>
+      <version>2.6.0</version>
     </dependency>
   </dependencies>
 
@@ -123,8 +123,8 @@
             <artifactId>maven-compiler-plugin</artifactId>
             <version>3.0</version>
             <configuration>
-                <source>1.5</source>
-                <target>1.5</target>
+                <source>8</source>
+                <target>8</target>
             </configuration>
         </plugin>
     </plugins>
