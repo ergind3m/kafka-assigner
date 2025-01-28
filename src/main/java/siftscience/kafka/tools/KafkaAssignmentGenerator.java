@@ -15,10 +15,12 @@ import kafka.cluster.Broker;
 import kafka.cluster.BrokerEndPoint;
 import kafka.cluster.EndPoint;
 import org.apache.commons.lang3.StringUtils;
-import org.apache.kafka.clients.admin.TopicDescription;
+import org.apache.kafka.clients.admin.*;
 import org.apache.kafka.common.Node;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.network.ListenerName;
 
+import org.apache.kafka.common.requests.DescribeLogDirsResponse;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.checkerframework.checker.nullness.qual.Nullable;
 import org.json.JSONArray;
@@ -29,10 +31,6 @@ import org.kohsuke.args4j.Option;
 
 import scala.collection.Seq;
 
-import org.apache.kafka.clients.admin.AdminClient;
-import org.apache.kafka.clients.admin.DescribeClusterResult;
-import org.apache.kafka.clients.admin.AdminClientConfig;
-
 import java.util.concurrent.ExecutionException;
 
 /**
@@ -42,11 +40,11 @@ import java.util.concurrent.ExecutionException;
  * <br />
  * Usage:
  * <code>
- *     bin/kafka-assignment-generator.sh
- *     --zk_string zkhost:2181
- *     --mode PRINT_REASSIGNMENT
- *     --broker_hosts host1,host2,host3
- *     --broker_hosts_to_remove misbehaving_host1
+ * bin/kafka-assignment-generator.sh
+ * --zk_string zkhost:2181
+ * --mode PRINT_REASSIGNMENT
+ * --broker_hosts host1,host2,host3
+ * --broker_hosts_to_remove misbehaving_host1
  * </code>
  */
 public class KafkaAssignmentGenerator {
@@ -165,8 +163,15 @@ public class KafkaAssignmentGenerator {
 //                        topics));
 
         Map<String, Map<Integer, List<Integer>>> initialAssignments = getReplicaAssignmentForTopics(adminClient,
-                        topics);
+                topics);
 
+        Map<String,Long> topicPartitionMap = Collections.emptyMap();
+        try {
+            System.out.println("Broker Log Directory Sizes:");
+            topicPartitionMap  = getLogFilesInfo(adminClient, brokerSet);
+        } catch (ExecutionException | InterruptedException e) {
+            System.out.println(e.getMessage() + " - Unable to get log file info");
+        }
 
         // Assign topics one at a time. This is slightly suboptimal from a packing standpoint, but
         // it's close enough to work in practice. We can also always follow it up with a Kafka
@@ -183,12 +188,15 @@ public class KafkaAssignmentGenerator {
                 JSONObject partitionJson = new JSONObject();
                 partitionJson.put("topic", topic);
                 partitionJson.put("partition", e.getKey());
+                partitionJson.put("logDirSize",topicPartitionMap.get(generateKey(topic,e.getKey())));
                 partitionJson.put("replicas", new JSONArray(e.getValue()));
                 partitionsJson.put(partitionJson);
             }
         }
         json.put("partitions", partitionsJson);
         System.out.println("NEW ASSIGNMENT:\n" + json.toString());
+
+
     }
 
     private static Set<Integer> brokerHostnamesToBrokerIds(
@@ -203,7 +211,7 @@ public class KafkaAssignmentGenerator {
             }
         }
         Preconditions.checkArgument(!checkPresence ||
-                brokerHostnameSet.size() == brokerIdSet.size(),
+                        brokerHostnameSet.size() == brokerIdSet.size(),
                 "Some hostnames could not be found! We found: " + brokerIdSet);
 
         return brokerIdSet;
@@ -240,7 +248,7 @@ public class KafkaAssignmentGenerator {
     }
 
     private Map<Integer, String> getRackAssignment(AdminClient adminClient) {
-        List<Broker> brokers  = getAllBrokersInCluster(adminClient);
+        List<Broker> brokers = getAllBrokersInCluster(adminClient);
         Map<Integer, String> rackAssignment = Maps.newHashMap();
         if (!disableRackAwareness) {
             for (Broker broker : brokers) {
@@ -301,14 +309,14 @@ public class KafkaAssignmentGenerator {
         }
     }
 
-    private static List<Broker> getAllBrokersInCluster( AdminClient adminClient) {
+    private static List<Broker> getAllBrokersInCluster(AdminClient adminClient) {
         try {
             DescribeClusterResult clusterResult = adminClient.describeCluster();
             List<Broker> brokersList = new ArrayList<Broker>();
             clusterResult.nodes().get().forEach(node -> {
                 EndPoint endPoint = new EndPoint(node.host(), node.port()
                         , ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT)
-                        ,SecurityProtocol.PLAINTEXT);
+                        , SecurityProtocol.PLAINTEXT);
                 Seq<EndPoint> endPointSeq = scala.collection.JavaConverters.asScalaBuffer(Collections.singletonList(endPoint)).toSeq();
                 scala.Option<String> rack = scala.Option.apply(node.rack());
                 brokersList.add(new Broker(node.id(), endPointSeq, rack));
@@ -320,7 +328,7 @@ public class KafkaAssignmentGenerator {
         return Collections.emptyList();
     }
 
-    private static List<String> getAllTopics(AdminClient adminClient){
+    private static List<String> getAllTopics(AdminClient adminClient) {
         List<String> topicList = new ArrayList<String>();
         try {
             adminClient.listTopics().names().get().forEach(topic -> {
@@ -356,7 +364,7 @@ public class KafkaAssignmentGenerator {
         return replicaAssignment;
     }
 
-    public static JSONObject formatAsReassignmentJson( AdminClient adminClient, List<String> topics) {
+    public static JSONObject formatAsReassignmentJson(AdminClient adminClient, List<String> topics) {
         JSONObject reassignmentJson = new JSONObject();
         Map<String, TopicDescription> topicDescriptions = null;
         try {
@@ -371,7 +379,7 @@ public class KafkaAssignmentGenerator {
                     for (Node replica : partitionInfo.replicas()) {
                         replicas.add(replica.id());
                     }
-                    partitionObj.put("replicas",replicas);
+                    partitionObj.put("replicas", replicas);
 
                     reassignmentJson.append("partitions", partitionObj);
                 });
@@ -381,6 +389,39 @@ public class KafkaAssignmentGenerator {
         }
 
         return reassignmentJson;
+
+    }
+
+    private static Map<String, Long> getLogFilesInfo(AdminClient adminClient, Set<Integer> brokers) throws ExecutionException, InterruptedException {
+        DescribeLogDirsResult replicaLogDirs = adminClient.describeLogDirs(brokers);
+
+        Map<Integer, Map<String, DescribeLogDirsResponse.LogDirInfo>> logDirs = replicaLogDirs.all().get();
+
+        Map<String, Long> topicPartitionSize = new HashMap<>();
+        for (Map.Entry<Integer, Map<String, DescribeLogDirsResponse.LogDirInfo>> entry : logDirs.entrySet()) {
+            int brokerId = entry.getKey();
+            for (Map.Entry<String, DescribeLogDirsResponse.LogDirInfo> inner_entry : entry.getValue().entrySet()) {
+                DescribeLogDirsResponse.LogDirInfo logDirDescription = inner_entry.getValue();
+                Map<TopicPartition, DescribeLogDirsResponse.ReplicaInfo> replicaInfoMap = logDirDescription.replicaInfos;
+
+                for (Map.Entry<TopicPartition, DescribeLogDirsResponse.ReplicaInfo> infoEntry : replicaInfoMap.entrySet()) {
+                    TopicPartition tp = infoEntry.getKey();
+                    DescribeLogDirsResponse.ReplicaInfo replicaInfo = infoEntry.getValue();
+
+                    System.out.println("Broker: " + brokerId);
+                    System.out.println("Topic: " + tp.topic());
+                    System.out.println("Partition: " + tp.partition());
+                    System.out.println("Size: " + replicaInfo.size + " bytes");
+                    String key = generateKey(tp.topic(), tp.partition());
+                    topicPartitionSize.put(key, replicaInfo.size);
+                }
+            }
+        }
+        return topicPartitionSize;
+    }
+
+    private static String generateKey(String topic, Integer partition) {
+        return topic + "|" + partition;
     }
 
     public static void main(String[] args) throws JSONException {
