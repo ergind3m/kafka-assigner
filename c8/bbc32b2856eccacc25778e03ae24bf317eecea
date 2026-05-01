@@ -1,0 +1,25 @@
+src/test/java/siftscience/kafka/tools/KafkaAssignmentGeneratorTest.java
+  0f88d48aeb51f334 1-40
+src/main/java/siftscience/kafka/tools/KafkaAssignmentGenerator.java
+  0f88d48aeb51f334 170,411-414
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.1",
+  "base_commit_sha": "c8bbc32b2856eccacc25778e03ae24bf317eecea",
+  "prompts": {
+    "0f88d48aeb51f334": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "1f88d64c-d3d1-47bd-9a04-e3fae6aec364",
+        "model": "claude-opus-4-7"
+      },
+      "human_author": "ergind3m",
+      "messages": [],
+      "total_additions": 45,
+      "total_deletions": 5,
+      "accepted_lines": 45,
+      "overriden_lines": 0
+    }
+  }
+}
