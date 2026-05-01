@@ -167,7 +167,7 @@ public class KafkaAssignmentGenerator {
 
         Map<String,Long> topicPartitionMap = Collections.emptyMap();
         try {
-            System.out.println("Broker Log Directory Sizes:");
+            //System.out.println("Broker Log Directory Sizes:");
             topicPartitionMap  = getLogFilesInfo(adminClient, brokerSet);
         } catch (ExecutionException | InterruptedException e) {
             System.out.println(e.getMessage() + " - Unable to get log file info");
@@ -408,10 +408,10 @@ public class KafkaAssignmentGenerator {
                     TopicPartition tp = infoEntry.getKey();
                     DescribeLogDirsResponse.ReplicaInfo replicaInfo = infoEntry.getValue();
 
-                    System.out.println("Broker: " + brokerId);
-                    System.out.println("Topic: " + tp.topic());
-                    System.out.println("Partition: " + tp.partition());
-                    System.out.println("Size: " + replicaInfo.size + " bytes");
+//                    System.out.println("Broker: " + brokerId);
+//                    System.out.println("Topic: " + tp.topic());
+//                    System.out.println("Partition: " + tp.partition());
+//                    System.out.println("Size: " + replicaInfo.size + " bytes");
                     String key = generateKey(tp.topic(), tp.partition());
                     topicPartitionSize.put(key, replicaInfo.size);
                 }
