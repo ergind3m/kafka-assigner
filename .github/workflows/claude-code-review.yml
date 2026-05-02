@@ -43,3 +43,6 @@ jobs:
             "Please provide a code review for this pull request, including feedback on code quality, potential bugs, 
             and suggestions for improvement. Focus on the changes made in this PR and provide actionable 
             feedback for the developer."
+          claude_args: |
+            --allowedTools "mcp__github_inline_comment__create_inline_comment,Bash(gh pr comment:*),Bash(gh pr diff:*)"
+
