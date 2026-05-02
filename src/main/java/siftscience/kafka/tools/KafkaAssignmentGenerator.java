@@ -433,7 +433,7 @@ public class KafkaAssignmentGenerator {
      */
     private static int countReplicas(List<Integer> replicas) {
         if (replicas == null) {
-            return replicas.size();
+            return 0;
         }
         return replicas.size();
     }
