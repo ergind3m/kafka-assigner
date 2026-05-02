@@ -26,6 +26,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
+import org.kohsuke.args4j.CmdLineException;
 import org.kohsuke.args4j.CmdLineParser;
 import org.kohsuke.args4j.Option;
 
@@ -110,7 +111,6 @@ public class KafkaAssignmentGenerator {
     }
 
     private static void printCurrentBrokers(AdminClient adminClient) throws JSONException {
-        //List<Broker> brokers = JavaConversions.seqAsJavaList(zkUtils.getAllBrokersInCluster());
         List<Broker> brokers = getAllBrokersInCluster(adminClient);
         JSONArray json = new JSONArray();
         for (Broker broker : brokers) {
@@ -158,10 +158,6 @@ public class KafkaAssignmentGenerator {
         // Print the current assignment in case a rollback is needed
         printCurrentAssignment(adminClient, topics);
 
-//        Map<String, Map<Integer, List<Integer>>> initialAssignments =
-//                KafkaTopicAssigner.topicMapToJavaMap(getPartitionAssignmentForTopics(adminClient,
-//                        topics));
-
         Map<String, Map<Integer, List<Integer>>> initialAssignments = getReplicaAssignmentForTopics(adminClient,
                 topics);
 
@@ -169,7 +165,10 @@ public class KafkaAssignmentGenerator {
         try {
             //System.out.println("Broker Log Directory Sizes:");
             topicPartitionMap  = getLogFilesInfo(adminClient, brokerSet);
-        } catch (ExecutionException | InterruptedException e) {
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            System.out.println(e.getMessage() + " - Unable to get log file info");
+        } catch (ExecutionException e) {
             System.out.println(e.getMessage() + " - Unable to get log file info");
         }
 
@@ -188,7 +187,8 @@ public class KafkaAssignmentGenerator {
                 JSONObject partitionJson = new JSONObject();
                 partitionJson.put("topic", topic);
                 partitionJson.put("partition", e.getKey());
-                partitionJson.put("logDirSize",topicPartitionMap.get(generateKey(topic,e.getKey())));
+                partitionJson.put("logDirSize",
+                        topicPartitionMap.getOrDefault(generateKey(topic, e.getKey()), 0L));
                 partitionJson.put("replicas", new JSONArray(e.getValue()));
                 partitionsJson.put(partitionJson);
             }
@@ -270,12 +270,12 @@ public class KafkaAssignmentGenerator {
         CmdLineParser parser = new CmdLineParser(this);
         try {
             parser.parseArgument(args);
-            Preconditions.checkNotNull(bootstrapServers);
-            Preconditions.checkNotNull(mode);
+            Preconditions.checkNotNull(bootstrapServers, "--bootstrap_servers is required");
+            Preconditions.checkNotNull(mode, "--mode is required");
             Preconditions.checkArgument(brokerIds == null || brokerHostnames == null,
-                    "--kafka_assigner_integer_broker_ids and " +
-                            "--kafka_assigner_broker_hosts cannot be used together!");
-        } catch (Exception e) {
+                    "--integer_broker_ids and --broker_hosts cannot be used together!");
+        } catch (CmdLineException | NullPointerException | IllegalArgumentException e) {
+            System.err.println("Error: " + e.getMessage());
             System.err.println("./kafka-assignment-generator.sh [options...] arguments...");
             parser.printUsage(System.err);
             return;
@@ -322,10 +322,12 @@ public class KafkaAssignmentGenerator {
                 brokersList.add(new Broker(node.id(), endPointSeq, rack));
             });
             return brokersList;
-        } catch (Exception e) {
-            e.printStackTrace();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new RuntimeException(e);
+        } catch (ExecutionException e) {
+            throw new RuntimeException(e);
         }
-        return Collections.emptyList();
     }
 
     private static List<String> getAllTopics(AdminClient adminClient) {
@@ -366,6 +368,7 @@ public class KafkaAssignmentGenerator {
 
     public static JSONObject formatAsReassignmentJson(AdminClient adminClient, List<String> topics) {
         JSONObject reassignmentJson = new JSONObject();
+        reassignmentJson.put("version", KAFKA_FORMAT_VERSION);
         Map<String, TopicDescription> topicDescriptions = null;
         try {
             topicDescriptions = adminClient.describeTopics(topics).all().get();
