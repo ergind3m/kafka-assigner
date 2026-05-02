@@ -190,6 +190,7 @@ public class KafkaAssignmentGenerator {
                 partitionJson.put("logDirSize",
                         topicPartitionMap.getOrDefault(generateKey(topic, e.getKey()), 0L));
                 partitionJson.put("replicas", new JSONArray(e.getValue()));
+                partitionJson.put("replicaCount", countReplicas(e.getValue()));
                 partitionsJson.put(partitionJson);
             }
         }
@@ -425,6 +426,16 @@ public class KafkaAssignmentGenerator {
 
     private static String generateKey(String topic, Integer partition) {
         return topic + "|" + partition;
+    }
+
+    /**
+     * Returns the number of replicas in the given list, treating null as zero.
+     */
+    private static int countReplicas(List<Integer> replicas) {
+        if (replicas == null) {
+            return 0;
+        }
+        return replicas.size();
     }
 
     public static void main(String[] args) throws JSONException {
